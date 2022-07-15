@@ -1,3 +1,12 @@
+let APP_ID  = "65a541c9799348f49d228c72f96bb077"
+
+let token = null;
+let uid = String(Math.floor(Math.random() * 10000))
+
+let client;
+let channel;
+
+
 let localStream;
 let remoteStream
 let peerConnection;
@@ -10,22 +19,43 @@ const servers = {
     ]
 }
 let init = async() => {
+    client = await AgoraRTM.createInstance(APP_ID)
+    await client.login({uid, token})
+
+    channel = client.createChannel('main')
+
+    await channel.join()
+
+    channel.on('MemberJoined', handleUserJoined)
+
+    client.on('MessageFromPeer', handleMessageFromPeer)
+
     localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
     document.getElementById("user-1").srcObject = localStream
     
-    createOffer()
+}
+
+let handleUserJoined = async = (MemberId) => {
+    console.log('A new User joined the channel ', MemberId)
+    createOffer(MemberId)
 
 }
 
-let createOffer = async () => {
+let handleMessageFromPeer = async (message, MemberId) => {
+    message = JSON.parse(message.text)
+    console.log('Message; ', message)
+
+}
+let createOffer = async (MemberId) => {
     peerConnection = new RTCPeerConnection(servers);
+    if(!localStream){
+        remoteStream = new MediaStream()
+        document.getElementById("user-2").srcObject = remoteStream;
+    }
 
-    remoteStream = new MediaStream()
-    document.getElementById("user-2").srcObject = remoteStream;
-
-    localStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, localStream)
-    })
+        localStream.getTracks().forEach((track) => {
+            peerConnection.addTrack(track, localStream)
+        })
 
     peerConnection.ontrack = (event) =>{
         event.streams[0].getTracks().forEach((track) => {
@@ -35,12 +65,13 @@ let createOffer = async () => {
 
     peerConnection.onicecandidate  = async (event) => {
         if(event.candidate){
-            console.log("New ICE Candidate ". event.candidate)
+            client.sendMessageToPeer({text: JSON.stringify({'type': 'candidate', 'candidate': event.candidate })}, MemberId)
+
         }
     }
+
     let offer = await peerConnection.createOffer()
     await peerConnection.setLocalDescription(offer)
 
-    console.log("offer: ", offer)
 }
 init()
