@@ -43,14 +43,32 @@ let handleUserJoined = async = (MemberId) => {
 
 let handleMessageFromPeer = async (message, MemberId) => {
     message = JSON.parse(message.text)
+    if(message.type == 'offer'){
+        createAnswer(MemberId, message.offer)
+    }
+
+    if(message.type == 'answer'){
+        addAnswer(message.answer)
+    }
+
+    
+    if(message.type == 'candidate'){
+        if(peerConnection){
+            peerConnection.addIceCandidate(message.candidate)
+        }
+    }
     console.log('Message; ', message)
 
 }
-let createOffer = async (MemberId) => {
+
+let createPeerConnection = async (MemberId) => {
     peerConnection = new RTCPeerConnection(servers);
+    
+    remoteStream = new MediaStream()
+    document.getElementById("user-2").srcObject = remoteStream;
     if(!localStream){
-        remoteStream = new MediaStream()
-        document.getElementById("user-2").srcObject = remoteStream;
+        localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
+        document.getElementById("user-1").srcObject = localStream
     }
 
         localStream.getTracks().forEach((track) => {
@@ -60,6 +78,7 @@ let createOffer = async (MemberId) => {
     peerConnection.ontrack = (event) =>{
         event.streams[0].getTracks().forEach((track) => {
             remoteStream.addTrack(track)
+            
         })
     }
 
@@ -70,8 +89,32 @@ let createOffer = async (MemberId) => {
         }
     }
 
+}
+let createOffer = async (MemberId) => {
+    
+    await createPeerConnection(MemberId)
     let offer = await peerConnection.createOffer()
     await peerConnection.setLocalDescription(offer)
 
+}
+
+let createAnswer = async(MemberId) => {
+    await createPeerConnection(MemberId)
+
+    await peerConnection.setRmoteDescription(offer);
+
+    let answer = await peerConnection.createAnswer()
+
+    await peerConnection.setLocalDescription(answer)
+
+    client.sendMessageToPeer({text: JSON.stringify({'type': 'answer', 'answer': answer })}, MemberId)
+
+
+}
+
+let addAnswer = async(answer) =>{
+    if(!peerConnection.currentRemoteDescription){
+        peerConnection.setRmoteDescription(answer)
+    }
 }
 init()
